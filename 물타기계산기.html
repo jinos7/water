@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>미국 주식 물타기 계산기</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & Noto Sans KR -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc;
+        }
+        /* 숫자 입력창 화살표 제거 */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 sm:p-6">
+
+    <!-- 메인 컨테이너 -->
+    <div class="w-full max-w-2xl bg-slate-800/90 backdrop-blur-md border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+        
+        <!-- 헤더 영역 -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 sm:p-8 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">🇺🇸 미국 주식 물타기 계산기</h1>
+                    <p class="text-blue-100 text-sm mt-1">고점 탈출을 위한 추가 매수 단가 및 수익률 시뮬레이터</p>
+                </div>
+                <div class="hidden sm:flex items-center justify-center w-12 h-12 bg-white/10 rounded-xl backdrop-blur-sm text-2xl">
+                    📈
+                </div>
+            </div>
+        </div>
+
+        <!-- 본문 폼 영역 -->
+        <div class="p-6 sm:p-8 space-y-8">
+            
+            <!-- 알림 메시지 박스 (alert 대신 사용) -->
+            <div id="toastMessage" class="hidden p-3.5 rounded-xl text-sm font-medium transition-all duration-300"></div>
+
+            <!-- 1단계: 현재 보유 내역 및 시세 조회 -->
+            <section class="space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+                    <h2 class="text-lg font-semibold text-slate-200 flex items-center gap-2">
+                        <span class="bg-blue-500/20 text-blue-400 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold">1</span>
+                        현재 보유 종목 정보
+                    </h2>
+                    <span id="stockNameBadge" class="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-700 text-slate-300 hidden"></span>
+                </div>
+
+                <!-- 티커 입력 & 현재가 조회 -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="ticker" class="block text-xs font-medium text-slate-400 mb-1.5">종목명 (티커, 예: TSLA, AAPL)</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="ticker" placeholder="AAPL" uppercase
+                                class="w-full bg-slate-900/80 border border-slate-600 rounded-xl px-4 py-2.5 text-white font-semibold uppercase focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition">
+                            <button type="button" id="fetchPriceBtn" onclick="fetchStockPrice()"
+                                class="shrink-0 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-blue-600/20">
+                                <span id="btnText">현재가 조회</span>
+                                <svg id="loadingSpinner" class="animate-spin h-4 w-4 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="currentPrice" class="block text-xs font-medium text-slate-400 mb-1.5">
+                            현재가 ($) <span class="text-slate-500 text-[11px]">*조회 실패 시 직접 입력 가능</span>
+                        </label>
+                        <div class="relative">
+                            <span class="absolute left-3.5 top-2.5 text-slate-400 font-medium">$</span>
+                            <input type="number" id="currentPrice" step="0.01" min="0" placeholder="0.00" oninput="calculateAll()"
+                                class="w-full bg-slate-900/80 border border-slate-600 rounded-xl pl-8 pr-4 py-2.5 text-emerald-400 font-bold focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 보유 수량 & 평균 단가 -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="currentQty" class="block text-xs font-medium text-slate-400 mb-1.5">현재 보유 수량 (주)</label>
+                        <input type="number" id="currentQty" step="any" min="0" placeholder="예: 50" oninput="calculateAll()"
+                            class="w-full bg-slate-900/80 border border-slate-600 rounded-xl px-4 py-2.5 text-white font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition">
+                    </div>
+
+                    <div>
+                        <label for="avgPrice" class="block text-xs font-medium text-slate-400 mb-1.5">현재 평균단가 ($)</label>
+                        <div class="relative">
+                            <span class="absolute left-3.5 top-2.5 text-slate-400 font-medium">$</span>
+                            <input type="number" id="avgPrice" step="0.01" min="0" placeholder="예: 250.00" oninput="calculateAll()"
+                                class="w-full bg-slate-900/80 border border-slate-600 rounded-xl pl-8 pr-4 py-2.5 text-white font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1단계 결과 요약 카드 -->
+                <div class="bg-slate-900/60 border border-slate-700/80 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
+                    <div>
+                        <p class="text-xs text-slate-400">총 매입금액</p>
+                        <p id="resPurchaseAmount" class="text-base sm:text-lg font-bold text-slate-200 mt-0.5">$0.00</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400">현재 평가금액</p>
+                        <p id="resEvalAmount" class="text-base sm:text-lg font-bold text-slate-200 mt-0.5">$0.00</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400">평가손익</p>
+                        <p id="resProfitLoss" class="text-base sm:text-lg font-bold text-slate-200 mt-0.5">$0.00</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400">현재 수익률</p>
+                        <p id="resReturnRate" class="text-base sm:text-lg font-bold text-slate-200 mt-0.5">0.00%</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2단계: 물타기(추가 매수) 시뮬레이션 -->
+            <section class="space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+                    <h2 class="text-lg font-semibold text-slate-200 flex items-center gap-2">
+                        <span class="bg-indigo-500/20 text-indigo-400 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold">2</span>
+                        물타기 (추가 매수) 계산
+                    </h2>
+                    <span class="text-xs text-slate-400">현재가 기준 매수</span>
+                </div>
+
+                <div>
+                    <label for="addQty" class="block text-xs font-medium text-slate-400 mb-1.5">추가 매수할 수량 (주)</label>
+                    <input type="number" id="addQty" step="any" min="0" placeholder="물타기할 수량을 입력하세요 (예: 30)" oninput="calculateAll()"
+                        class="w-full bg-slate-900/80 border border-indigo-500/50 rounded-xl px-4 py-3 text-white text-lg font-semibold focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30 transition">
+                </div>
+
+                <!-- 2단계 최종 결과 하이라이트 카드 -->
+                <div class="bg-gradient-to-br from-indigo-950/80 to-slate-900 border border-indigo-500/30 rounded-xl p-5 space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60">
+                            <p class="text-xs text-indigo-300 font-medium">추가 매수에 필요한 자금</p>
+                            <p id="resRequiredFunds" class="text-2xl font-bold text-white mt-1">$0.00</p>
+                            <p id="resTotalQty" class="text-xs text-slate-400 mt-1">물타기 후 총 보유수량: 0주</p>
+                        </div>
+
+                        <div class="bg-slate-900/80 p-4 rounded-xl border border-emerald-500/30">
+                            <p class="text-xs text-emerald-300 font-medium">물타기 후 새로운 평균단가</p>
+                            <p id="resNewAvgPrice" class="text-2xl font-bold text-emerald-400 mt-1">$0.00</p>
+                            <p id="resPriceDiff" class="text-xs text-slate-400 mt-1">기존 평단가 대비: $0.00</p>
+                        </div>
+                    </div>
+
+                    <!-- 추가 인사이트: 물타기 후 수익률 변화 및 본전까지 필요한 상승률 -->
+                    <div class="pt-3 border-t border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-300">
+                        <div>
+                            물타기 후 예상 수익률: <span id="resNewReturnRate" class="font-bold text-white">0.00%</span>
+                        </div>
+                        <div>
+                            원금 회복(본전)까지 필요한 주가 상승률: <span id="resBreakEvenGain" class="font-bold text-amber-400">0.00%</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3단계: 선입선출 절세(손실 확정) & 재매수 시뮬레이터 -->
+            <section class="space-y-4 pt-2 border-t border-slate-700">
+                <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+                    <h2 class="text-lg font-semibold text-amber-300 flex items-center gap-2">
+                        <span class="bg-amber-500/20 text-amber-400 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold">3</span>
+                        선입선출 절세(손실확정) & 재매수 시뮬레이터
+                    </h2>
+                    <span class="text-xs text-slate-400">해외주식 양도세 22% 기준</span>
+                </div>
+
+                <p class="text-xs text-slate-400 leading-relaxed bg-slate-900/50 p-3 rounded-xl border border-slate-700/60">
+                    💡 <strong class="text-slate-200">절세 원리:</strong> 선입선출 계좌에서 고점에 물린 주식을 먼저 매도해 손실을 확정하면 올해 이미 발생한 양도차익과 상계되어 <strong class="text-amber-300">확정 손실액의 22%만큼 세금이 줄어듭니다.</strong> (한국은 Wash Sale 규정이 없어 매도 직후 재매수 가능)
+                </p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                        <label for="sellQtyForTax" class="block text-xs font-medium text-slate-400 mb-1.5">
+                            손실 확정할 매도 수량 (주)
+                        </label>
+                        <input type="number" id="sellQtyForTax" step="any" min="0" placeholder="예: 1369 (전량)" oninput="calculateAll()"
+                            class="w-full bg-slate-900/80 border border-amber-500/50 rounded-xl px-4 py-2.5 text-white font-semibold focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition">
+                    </div>
+
+                    <div>
+                        <label for="extraCashUSD" class="block text-xs font-medium text-slate-400 mb-1.5">
+                            추가 투입할 현금 ($)
+                        </label>
+                        <div class="relative">
+                            <span class="absolute left-3.5 top-2.5 text-slate-400 font-medium">$</span>
+                            <input type="number" id="extraCashUSD" step="100" min="0" placeholder="예: 20000" oninput="calculateAll()"
+                                class="w-full bg-slate-900/80 border border-slate-600 rounded-xl pl-8 pr-4 py-2.5 text-white font-medium focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="usdKrwRate" class="block text-xs font-medium text-slate-400 mb-1.5">
+                            적용 환율 (원/$)
+                        </label>
+                        <input type="number" id="usdKrwRate" step="1" min="0" value="1400" oninput="calculateAll()"
+                            class="w-full bg-slate-900/80 border border-slate-600 rounded-xl px-4 py-2.5 text-slate-200 font-medium focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition">
+                    </div>
+                </div>
+
+                <!-- 절세 및 재매수 결과 카드 -->
+                <div class="bg-gradient-to-br from-amber-950/40 to-slate-900 border border-amber-500/30 rounded-xl p-5 space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60">
+                            <p class="text-xs text-amber-300 font-medium">확정되는 양도차손 (손실액)</p>
+                            <p id="resRealizedLoss" class="text-xl font-bold text-rose-400 mt-1">$0.00 (0원)</p>
+                            <p id="resTaxSavedKRW" class="text-xs text-emerald-400 font-semibold mt-1">예상 절세 효과 (22%): 약 0원</p>
+                        </div>
+
+                        <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60">
+                            <p class="text-xs text-indigo-300 font-medium">매도대금 + 추가현금 재매수 시</p>
+                            <p id="resRebuyTotalQty" class="text-xl font-bold text-white mt-1">총 0주 보유</p>
+                            <p id="resRebuyNewAvg" class="text-xs text-emerald-400 font-semibold mt-1">재매수 후 평단가: $0.00</p>
+                            <p id="resTrueBreakEven" class="text-xs text-amber-300 font-semibold mt-1">확정손실 포함 원금회복 목표가: $0.00 (+0.00%)</p>
+                        </div>
+                    </div>
+                    <div class="text-[11px] text-slate-400 leading-relaxed">
+                        ※ 주의: 매도 체결 후 <strong class="text-slate-300">즉시 재매수</strong>할 때, 기존 물량을 먼저 판 뒤 사야 선입선출로 고가 물량이 털립니다. 또한 매매 수수료(약 0.07~0.25%) 및 환전 스프레드를 고려해 호가 공백이 적은 정규장 시간대에 분할 실행하는 것이 유리합니다.
+                    </div>
+                </div>
+            </section>
+
+            <!-- 하단 초기화 버튼 -->
+            <div class="flex justify-between items-center pt-2">
+                <button type="button" onclick="loadUserScenario()"
+                    class="text-xs text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3.5 py-2 rounded-lg transition">
+                    질문하신 SOXL 예시값 채우기
+                </button>
+                <button type="button" onclick="resetForm()"
+                    class="text-xs text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-700 px-4 py-2 rounded-lg transition">
+                    입력값 초기화
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 금액 포맷팅 함수 ($1,234.56)
+        function formatUSD(amount) {
+            if (isNaN(amount) || !isFinite(amount)) return '$0.00';
+            const sign = amount < 0 ? '-' : '';
+            return sign + '$' + Math.abs(amount).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        // 퍼센트 포맷팅 함수 (+12.34%)
+        function formatPercent(value) {
+            if (isNaN(value) || !isFinite(value)) return '0.00%';
+            const sign = value > 0 ? '+' : '';
+            return sign + value.toFixed(2) + '%';
+        }
+
+        // 알림 메시지 출력 함수
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toastMessage');
+            if (!toast) return;
+            toast.textContent = message;
+            toast.className = 'p-3.5 rounded-xl text-sm font-medium transition-all duration-300 ';
+            if (type === 'error') {
+                toast.className += 'bg-rose-500/20 border border-rose-500/40 text-rose-300';
+            } else if (type === 'success') {
+                toast.className += 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300';
+            } else {
+                toast.className += 'bg-blue-500/20 border border-blue-500/40 text-blue-300';
+            }
+            toast.classList.remove('hidden');
+        }
+
+        // 미국 주식 현재가 조회 함수 (Finnhub API 우선 사용 + 프록시 Fallback)
+        async function fetchStockPrice() {
+            const tickerInput = document.getElementById('ticker');
+            const ticker = tickerInput.value.trim().toUpperCase();
+            
+            if (!ticker) {
+                showToast('종목명(티커)을 먼저 입력해주세요. (예: TSLA, NVDA)', 'error');
+                tickerInput.focus();
+                return;
+            }
+
+            tickerInput.value = ticker;
+            const btn = document.getElementById('fetchPriceBtn');
+            const btnText = document.getElementById('btnText');
+            const spinner = document.getElementById('loadingSpinner');
+
+            // 로딩 상태 UI 변경
+            btn.disabled = true;
+            btnText.textContent = '조회중';
+            spinner.classList.remove('hidden');
+
+            try {
+                let fetchedSuccess = false;
+                const finnhubApiKey = 'd40b8f9r01qkrgfcbnf0d40b8f9r01qkrgfcbnfg';
+
+                // 1순위: Finnhub.io 공식 API 직접 호출 (CORS 지원, 빠르고 안정적)
+                try {
+                    const finnhubUrl = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=${finnhubApiKey}`;
+                    const response = await fetch(finnhubUrl);
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        // Finnhub 응답에서 'c'는 현재가(Current price)를 의미함 (유효하지 않은 티커는 0 반환)
+                        if (data && typeof data.c === 'number' && data.c > 0) {
+                            const currentPrice = data.c;
+                            document.getElementById('currentPrice').value = currentPrice.toFixed(2);
+                            
+                            const badge = document.getElementById('stockNameBadge');
+                            badge.textContent = `${ticker} (USD · Finnhub 실시간)`;
+                            badge.classList.remove('hidden');
+
+                            showToast(`${ticker} 현재가($${currentPrice.toFixed(2)})를 성공적으로 불러왔습니다.`, 'success');
+                            calculateAll();
+                            fetchedSuccess = true;
+                        }
+                    }
+                } catch (err) {
+                    // Finnhub 호출 실패 시 아래 백업 프록시 로직으로 자동 전환
+                }
+
+                // 2순위(백업): Finnhub에서 조회되지 않을 경우 Yahoo Finance 프록시 시도
+                if (!fetchedSuccess) {
+                    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
+                    const proxyEndpoints = [
+                        {
+                            url: `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+                            parse: async (res) => await res.json()
+                        },
+                        {
+                            url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+                            parse: async (res) => {
+                                const wrapper = await res.json();
+                                return JSON.parse(wrapper.contents);
+                            }
+                        }
+                    ];
+
+                    for (const endpoint of proxyEndpoints) {
+                        try {
+                            const controller = new AbortController();
+                            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                            const response = await fetch(endpoint.url, { signal: controller.signal });
+                            clearTimeout(timeoutId);
+
+                            if (!response.ok) continue;
+
+                            const parsedData = await endpoint.parse(response);
+
+                            if (parsedData?.chart?.result?.[0]?.meta?.regularMarketPrice) {
+                                const meta = parsedData.chart.result[0].meta;
+                                const regularMarketPrice = meta.regularMarketPrice;
+                                const shortName = meta.shortName || ticker;
+
+                                document.getElementById('currentPrice').value = regularMarketPrice.toFixed(2);
+                                
+                                const badge = document.getElementById('stockNameBadge');
+                                badge.textContent = `${shortName} (${meta.currency || 'USD'})`;
+                                badge.classList.remove('hidden');
+
+                                showToast(`${ticker} 현재가($${regularMarketPrice.toFixed(2)})를 성공적으로 불러왔습니다.`, 'success');
+                                calculateAll();
+                                fetchedSuccess = true;
+                                break;
+                            }
+                        } catch (err) {
+                            continue;
+                        }
+                    }
+                }
+
+                if (!fetchedSuccess) {
+                    showToast(`'${ticker}' 종목을 찾을 수 없거나 시세 조회에 실패했습니다. 티커를 확인하거나 [현재가]를 직접 입력해 주세요.`, 'error');
+                    document.getElementById('currentPrice').focus();
+                }
+            } finally {
+                // 어떤 상황에서도 버튼 로딩 상태 반드시 복구
+                btn.disabled = false;
+                btnText.textContent = '현재가 조회';
+                spinner.classList.add('hidden');
+            }
+        }
+
+        // 전체 계산 수행 함수
+        function calculateAll() {
+            const currentPrice = parseFloat(document.getElementById('currentPrice').value) || 0;
+            const currentQty = parseFloat(document.getElementById('currentQty').value) || 0;
+            const avgPrice = parseFloat(document.getElementById('avgPrice').value) || 0;
+            const addQty = parseFloat(document.getElementById('addQty').value) || 0;
+
+            // 1. 현재 보유 상태 계산
+            const purchaseAmount = currentQty * avgPrice; // 매입금액
+            const evalAmount = currentQty * currentPrice; // 평가금액
+            const profitLoss = evalAmount - purchaseAmount; // 평가손익
+            const returnRate = purchaseAmount > 0 ? (profitLoss / purchaseAmount) * 100 : 0; // 수익률
+
+            // 1단계 결과 업데이트
+            document.getElementById('resPurchaseAmount').textContent = formatUSD(purchaseAmount);
+            document.getElementById('resEvalAmount').textContent = formatUSD(evalAmount);
+            
+            const plElement = document.getElementById('resProfitLoss');
+            const rrElement = document.getElementById('resReturnRate');
+            
+            plElement.textContent = formatUSD(profitLoss);
+            rrElement.textContent = formatPercent(returnRate);
+
+            // 손익 색상 적용 (미국 주식 기준: 상승/이익 초록, 하락/손실 빨강)
+            const colorClass = profitLoss > 0 ? 'text-emerald-400' : (profitLoss < 0 ? 'text-rose-400' : 'text-slate-200');
+            plElement.className = `text-base sm:text-lg font-bold mt-0.5 ${colorClass}`;
+            rrElement.className = `text-base sm:text-lg font-bold mt-0.5 ${colorClass}`;
+
+            // 2. 물타기(추가 매수) 계산
+            const requiredFunds = addQty * currentPrice; // 추가 매수 필요 자금
+            const totalQty = currentQty + addQty; // 물타기 후 총 보유 수량
+            const totalPurchaseAmount = purchaseAmount + requiredFunds; // 물타기 후 총 매입금액
+            
+            // 새로운 평균단가
+            const newAvgPrice = totalQty > 0 ? totalPurchaseAmount / totalQty : 0;
+            const priceDiff = (avgPrice > 0 && newAvgPrice > 0) ? newAvgPrice - avgPrice : 0;
+
+            // 물타기 후 예상 수익률 및 본전 도달 필요 상승률
+            const newEvalAmount = totalQty * currentPrice;
+            const newProfitLoss = newEvalAmount - totalPurchaseAmount;
+            const newReturnRate = totalPurchaseAmount > 0 ? (newProfitLoss / totalPurchaseAmount) * 100 : 0;
+            const breakEvenGain = (currentPrice > 0 && newAvgPrice > currentPrice) 
+                ? ((newAvgPrice - currentPrice) / currentPrice) * 100 
+                : 0;
+
+            // 2단계 결과 업데이트
+            document.getElementById('resRequiredFunds').textContent = formatUSD(requiredFunds);
+            document.getElementById('resTotalQty').textContent = `물타기 후 총 보유수량: ${totalQty.toLocaleString('en-US')}주`;
+            
+            document.getElementById('resNewAvgPrice').textContent = formatUSD(newAvgPrice);
+            
+            const diffSign = priceDiff > 0 ? '+' : '';
+            document.getElementById('resPriceDiff').textContent = `기존 평단가 대비: ${diffSign}${formatUSD(priceDiff)}`;
+
+            const newRrElement = document.getElementById('resNewReturnRate');
+            newRrElement.textContent = formatPercent(newReturnRate);
+            newRrElement.className = `font-bold ${newReturnRate > 0 ? 'text-emerald-400' : (newReturnRate < 0 ? 'text-rose-400' : 'text-white')}`;
+
+            document.getElementById('resBreakEvenGain').textContent = `+${breakEvenGain.toFixed(2)}%`;
+
+            // 3. 선입선출 절세(손실확정) & 재매수 시뮬레이션 계산
+            const sellQtyForTax = Math.min(parseFloat(document.getElementById('sellQtyForTax').value) || 0, currentQty);
+            const extraCashUSD = parseFloat(document.getElementById('extraCashUSD').value) || 0;
+            const usdKrwRate = parseFloat(document.getElementById('usdKrwRate').value) || 1400;
+
+            // 매도 시 확정되는 손익 (현재가 - 평균단가) * 매도수량
+            const realizedPL = (currentPrice - avgPrice) * sellQtyForTax;
+            const realizedLoss = realizedPL < 0 ? realizedPL : 0; // 손실만 절세 효과 발생
+            const realizedLossKRW = Math.round(realizedLoss * usdKrwRate);
+            const taxSavedUSD = Math.abs(realizedLoss) * 0.22;
+            const taxSavedKRW = Math.round(taxSavedUSD * usdKrwRate);
+
+            // 매도 회수금 + 추가 현금으로 현재가에 전액 재매수 시
+            const sellProceeds = sellQtyForTax * currentPrice;
+            const totalAvailableCash = sellProceeds + extraCashUSD;
+            const rebuyQty = currentPrice > 0 ? (totalAvailableCash / currentPrice) : 0;
+            
+            const remainingOldQty = currentQty - sellQtyForTax;
+            const finalTotalQty = remainingOldQty + rebuyQty;
+            const finalTotalCost = (remainingOldQty * avgPrice) + (rebuyQty * currentPrice);
+            const finalAvgPrice = finalTotalQty > 0 ? (finalTotalCost / finalTotalQty) : 0;
+
+            // 확정된 손실액까지 모두 만회하기 위한 실질 원금회복(True Break-Even) 목표 주가 계산
+            // 총 투입 원금(기존 매입원금 + 추가 현금) / 최종 보유 수량
+            const totalInvestedCapital = purchaseAmount + extraCashUSD;
+            const trueBreakEvenPrice = finalTotalQty > 0 ? (totalInvestedCapital / finalTotalQty) : 0;
+            const trueBreakEvenGain = (currentPrice > 0 && trueBreakEvenPrice > currentPrice)
+                ? ((trueBreakEvenPrice - currentPrice) / currentPrice) * 100
+                : 0;
+
+            document.getElementById('resRealizedLoss').textContent = `${formatUSD(realizedLoss)} (${realizedLossKRW.toLocaleString('ko-KR')}원)`;
+            document.getElementById('resTaxSavedKRW').textContent = `예상 절세 효과 (22%): 약 ${taxSavedKRW.toLocaleString('ko-KR')}원 ($${taxSavedUSD.toFixed(2)})`;
+            document.getElementById('resRebuyTotalQty').textContent = `총 ${finalTotalQty.toLocaleString('en-US', { maximumFractionDigits: 2 })}주 보유`;
+            document.getElementById('resRebuyNewAvg').textContent = `재매수 후 평단가: ${formatUSD(finalAvgPrice)}`;
+            document.getElementById('resTrueBreakEven').textContent = `확정손실 포함 원금회복 목표가: ${formatUSD(trueBreakEvenPrice)} (+${trueBreakEvenGain.toFixed(2)}%)`;
+        }
+
+        // 사용자 질문 시나리오(SOXL 1369주, $139.0912, $20,000 추가) 자동 입력
+        function loadUserScenario() {
+            document.getElementById('ticker').value = 'SOXL';
+            document.getElementById('currentQty').value = '1369';
+            document.getElementById('avgPrice').value = '139.0912';
+            document.getElementById('sellQtyForTax').value = '1369';
+            document.getElementById('extraCashUSD').value = '20000';
+            fetchStockPrice();
+        }
+
+        // 입력값 초기화 함수
+        function resetForm() {
+            document.getElementById('ticker').value = '';
+            document.getElementById('currentPrice').value = '';
+            document.getElementById('currentQty').value = '';
+            document.getElementById('avgPrice').value = '';
+            document.getElementById('addQty').value = '';
+            document.getElementById('sellQtyForTax').value = '';
+            document.getElementById('extraCashUSD').value = '';
+            document.getElementById('stockNameBadge').classList.add('hidden');
+            document.getElementById('toastMessage').classList.add('hidden');
+            calculateAll();
+            showToast('모든 입력값이 초기화되었습니다.', 'info');
+        }
+    </script>
+</body>
+</html>
